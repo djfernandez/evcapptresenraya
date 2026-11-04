@@ -1,8 +1,12 @@
 pipeline {
     agent any
 
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
     environment {
-        REPO_URL = 'https://github.com/djfernandez/evcapptresenraya.git'
         IMAGE_NAME = 'dannyjoel1978/tres-en-raya'
     }
 
@@ -10,24 +14,18 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '=== Etapa: Checkout ==='
-                echo 'https://github.com/djfernandez/evcapptresenraya.git'
-                sh '''
-                    rm -rf evcapptresenraya
-                    git clone --depth 1 --branch main "${REPO_URL}" evcapptresenraya
-                '''
+                checkout scm
                 script {
-                    env.COMMIT = sh(script: 'git -C evcapptresenraya rev-parse HEAD', returnStdout: true).trim()
+                    env.COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                 }
-                echo "Repositorio clonado. Commit: ${env.COMMIT}"
+                echo "Repositorio listo. Commit: ${env.COMMIT}"
             }
         }
 
         stage('Build Image') {
             steps {
                 echo '=== Etapa: Build de imagen Docker ==='
-                dir('evcapptresenraya') {
-                    sh 'docker build -t "${IMAGE_NAME}:${COMMIT}" .'
-                }
+                sh 'docker build -t "${IMAGE_NAME}:${COMMIT}" .'
                 echo "Imagen ${env.IMAGE_NAME}:${env.COMMIT} creada"
             }
         }
@@ -56,11 +54,55 @@ pipeline {
             steps {
                 echo '=== Etapa: Deploy local ==='
                 sh '''
-                    docker rm -f tres-en-raya || true
-                    docker run -d --name tres-en-raya --restart unless-stopped \
-                        -p 9090:9090 "${IMAGE_NAME}:${COMMIT}"
+                    set -eu
+                    OLD_IMAGE=''
+
+                    if docker inspect tres-en-raya >/dev/null 2>&1; then
+                        OLD_IMAGE=$(docker inspect --format='{{.Config.Image}}' tres-en-raya)
+                        docker rm -f tres-en-raya >/dev/null
+                    fi
+
+                    rollback() {
+                        echo "Despliegue falló: $1"
+                        if docker inspect tres-en-raya >/dev/null 2>&1; then
+                            docker logs --tail 100 tres-en-raya || echo 'No se pudieron leer los logs del contenedor.'
+                            docker rm -f tres-en-raya >/dev/null
+                        fi
+                        if [ -n "$OLD_IMAGE" ]; then
+                            echo "Restaurando imagen anterior: $OLD_IMAGE"
+                            docker run -d --name tres-en-raya --restart unless-stopped \
+                                -p 9090:9090 "$OLD_IMAGE"
+                        else
+                            echo 'No hay una versión anterior para restaurar.'
+                        fi
+                        exit 1
+                    }
+
+                    if ! docker run -d --name tres-en-raya --restart unless-stopped \
+                        --health-cmd='wget -q -O /dev/null http://127.0.0.1:9090/ || exit 1' \
+                        --health-interval=5s --health-timeout=3s --health-retries=12 \
+                        -p 9090:9090 "${IMAGE_NAME}:${COMMIT}"; then
+                        rollback 'no se pudo iniciar el contenedor nuevo'
+                    fi
+
+                    attempts=0
+                    health_status=''
+                    while [ "$attempts" -lt 30 ]; do
+                        if ! health_status=$(docker inspect --format='{{.State.Health.Status}}' tres-en-raya); then
+                            rollback 'no se pudo consultar el estado del contenedor'
+                        fi
+                        [ "$health_status" = healthy ] && break
+                        [ "$health_status" = unhealthy ] && break
+                        attempts=$((attempts + 1))
+                        sleep 2
+                    done
+
+                    if [ "$health_status" != healthy ]; then
+                        rollback "el health check terminó con estado: $health_status"
+                    fi
+
+                    echo 'Despliegue saludable en http://localhost:9090'
                 '''
-                echo 'Aplicación disponible en http://localhost:9090'
             }
         }
     }
@@ -70,11 +112,10 @@ pipeline {
             echo '=== Pipeline completado: imagen publicada y desplegada ==='
         }
         failure {
-            echo '=== Pipeline fallo ==='
-            echo 'Revisar logs para mas detalles'
+            echo '=== Pipeline falló; revisar los logs de las etapas ==='
         }
         always {
-            sh 'rm -rf evcapptresenraya || true'
+            deleteDir()
             echo '=== Pipeline finalizado ==='
         }
     }
