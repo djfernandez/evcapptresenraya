@@ -7,6 +7,8 @@ pipeline {
     }
 
     environment {
+        REPO_URL = 'https://github.com/DjfmSoft/evcapptresenraya.git'
+        SOURCE_BRANCH = 'main'
         IMAGE_NAME = 'dannyjoel1978/tres-en-raya'
     }
 
@@ -14,7 +16,8 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '=== Etapa: Checkout ==='
-                checkout scm
+                deleteDir()
+                sh 'git clone --depth 1 --branch "${SOURCE_BRANCH}" "${REPO_URL}" .'
                 script {
                     env.COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                 }
@@ -35,8 +38,8 @@ pipeline {
                 echo '=== Etapa: Push a Docker Hub ==='
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKERHUB_USERNAME',
-                    passwordVariable: 'DOCKERHUB_TOKEN'
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
                         set +x

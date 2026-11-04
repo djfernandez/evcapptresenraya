@@ -61,7 +61,7 @@ docker build -f Dockerfile.jenkins -t jenkins-docker-cli .
 
 Configura tu contenedor de Jenkins para usar `jenkins-docker-cli` y recréalo. Esta imagen instala Docker CLI y Buildx; no ejecuta un daemon de Docker. Para operar sobre el Docker local, el contenedor de Jenkins también debe tener acceso al socket del host, normalmente `/var/run/docker.sock`.
 
-Configura el job como **Pipeline from SCM** o **Multibranch Pipeline** para que `checkout scm` use el commit que disparó la ejecución. El pipeline publica una imagen etiquetada con ese commit, despliega el contenedor en el puerto `9090` y espera a que pase el health check. Si el contenedor nuevo no está saludable, intenta restaurar la imagen desplegada anteriormente.
+El pipeline puede ejecutarse como **Pipeline script** (pegando el Jenkinsfile), **Pipeline from SCM** o **Multibranch Pipeline**: clona explícitamente la rama `main` del repositorio configurado en `jenkinsfile`, por lo que no depende de `checkout scm`. Publica una imagen etiquetada con el commit clonado, despliega el contenedor en el puerto `9090` y espera a que pase el health check. Si el contenedor nuevo no está saludable, intenta restaurar la imagen desplegada anteriormente.
 
 Para publicar imágenes, crea en Jenkins una credencial de tipo **Username with password** con ID `dockerhub-credentials`. Usa tu usuario de Docker Hub y un access token con permiso de escritura como contraseña. Asegúrate de que `IMAGE_NAME` en `jenkinsfile` apunte a un repositorio sobre el que esa cuenta tenga permiso para publicar. El usuario del agente Jenkins también necesita permiso para ejecutar Docker en el host.
 
