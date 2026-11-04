@@ -51,6 +51,16 @@ Haz doble clic en `index.html` o ejecuta en PowerShell:
 Start-Process index.html
 ```
 
+## 🐳 Jenkins con Docker CLI
+
+Para que el pipeline pueda ejecutar `docker build`, `docker push` y `docker run`, construye una imagen personalizada para Jenkins:
+
+```powershell
+docker build -f Dockerfile.jenkins -t jenkins-docker-cli .
+```
+
+Configura tu contenedor de Jenkins para usar `jenkins-docker-cli` y recréalo. Esta imagen instala Docker CLI y Buildx; no ejecuta un daemon de Docker. Para operar sobre el Docker local, el contenedor de Jenkins también debe tener acceso al socket del host, normalmente `/var/run/docker.sock`.
+
 ---
 
 ## 🧪 Pruebas Automatizadas

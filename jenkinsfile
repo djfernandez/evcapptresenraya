@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = 'https://github.com/djfernandez/evcapptresenraya.git'
+        IMAGE_NAME = 'dannyjoel1978/tres-en-raya'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '=== Etapa: Checkout ==='
+                echo 'https://github.com/djfernandez/evcapptresenraya.git'
+                sh '''
+                    rm -rf evcapptresenraya
+                    git clone --depth 1 --branch main "${REPO_URL}" evcapptresenraya
+                '''
+                script {
+                    env.COMMIT = sh(script: 'git -C evcapptresenraya rev-parse HEAD', returnStdout: true).trim()
+                }
+                echo "Repositorio clonado. Commit: ${env.COMMIT}"
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                echo '=== Etapa: Build de imagen Docker ==='
+                dir('evcapptresenraya') {
+                    sh 'docker build -t "${IMAGE_NAME}:${COMMIT}" .'
+                }
+                echo "Imagen ${env.IMAGE_NAME}:${env.COMMIT} creada"
+            }
+        }
+
+        stage('Push Docker Hub') {
+            steps {
+                echo '=== Etapa: Push a Docker Hub ==='
+                sh 'docker push "${IMAGE_NAME}:${COMMIT}"'
+                echo "Imagen publicada: ${env.IMAGE_NAME}:${env.COMMIT}"
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo '=== Etapa: Deploy local ==='
+                sh '''
+                    docker rm -f jenkinsdocker || true
+                    docker run -d --name jenkinsdocker --restart unless-stopped \
+                        -p 9090:9090 "${IMAGE_NAME}:${COMMIT}"
+                '''
+                echo 'Aplicación disponible en http://localhost:9090'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '=== Pipeline completado: imagen publicada y desplegada ==='
+        }
+        failure {
+            echo '=== Pipeline fallo ==='
+            echo 'Revisar logs para mas detalles'
+        }
+        always {
+            sh 'rm -rf evcapptresenraya || true'
+            echo '=== Pipeline finalizado ==='
+        }
+    }
+}
