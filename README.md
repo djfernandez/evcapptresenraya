@@ -61,6 +61,8 @@ docker build -f Dockerfile.jenkins -t jenkins-docker-cli .
 
 Configura tu contenedor de Jenkins para usar `jenkins-docker-cli` y recréalo. Esta imagen instala Docker CLI y Buildx; no ejecuta un daemon de Docker. Para operar sobre el Docker local, el contenedor de Jenkins también debe tener acceso al socket del host, normalmente `/var/run/docker.sock`.
 
+Para publicar imágenes, crea en Jenkins una credencial de tipo **Username with password** con ID `dockerhub-credentials`. Usa tu usuario de Docker Hub y un access token con permiso de escritura como contraseña. Asegúrate de que `IMAGE_NAME` en `jenkinsfile` apunte a un repositorio sobre el que esa cuenta tenga permiso para publicar.
+
 ---
 
 ## 🧪 Pruebas Automatizadas
